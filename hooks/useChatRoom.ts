@@ -43,17 +43,17 @@ export function useChatRoom(roomId: string) {
       }
 
       const [messagesResult, reactionsResult, messageReactionsResult] = await Promise.all([
-        supabase
+        supabase!
           .from('messages')
           .select('*')
           .eq('room_id', roomId)
           .order('timestamp', { ascending: true }),
-        supabase
+        supabase!
           .from('reactions')
           .select('*')
           .eq('room_id', roomId)
           .order('timestamp', { ascending: true }),
-        supabase
+        supabase!
           .from('message_reactions')
           .select('*')
           .eq('room_id', roomId)
@@ -63,8 +63,9 @@ export function useChatRoom(roomId: string) {
       if (messagesResult.error) {
         console.error('Error fetching messages:', messagesResult.error);
       } else {
+        const messages = (messagesResult.data || []) as Message[];
         setMessages(
-          (messagesResult.data || []).map((m) => ({
+          messages.map((m) => ({
             ...m,
             isSender: m.user_id === currentUserIdRef.current,
             mentions: m.mentions || [],
@@ -88,7 +89,7 @@ export function useChatRoom(roomId: string) {
     fetchInitialData();
 
     if (!isDemoMode && supabase) {
-      const messageChannel = supabase
+      const messageChannel = supabase!
         .channel(`messages-${roomId}`)
         .on(
           'postgres_changes',
@@ -115,7 +116,7 @@ export function useChatRoom(roomId: string) {
         )
         .subscribe();
 
-      const reactionChannel = supabase
+      const reactionChannel = supabase!
         .channel(`reactions-${roomId}`)
         .on(
           'postgres_changes',
@@ -135,7 +136,7 @@ export function useChatRoom(roomId: string) {
         )
         .subscribe();
 
-      const messageReactionChannel = supabase
+      const messageReactionChannel = supabase!
         .channel(`message-reactions-${roomId}`)
         .on(
           'postgres_changes',
@@ -156,9 +157,11 @@ export function useChatRoom(roomId: string) {
         .subscribe();
 
       return () => {
-        supabase.removeChannel(messageChannel);
-        supabase.removeChannel(reactionChannel);
-        supabase.removeChannel(messageReactionChannel);
+        if (supabase) {
+          supabase.removeChannel(messageChannel);
+          supabase.removeChannel(reactionChannel);
+          supabase.removeChannel(messageReactionChannel);
+        }
       };
     }
   }, [roomId, isDemoMode]);
@@ -183,7 +186,7 @@ export function useChatRoom(roomId: string) {
         return;
       }
 
-      const { error } = await supabase.from('messages').insert([newMessage]);
+      const { error } = await (supabase!.from('messages') as any).insert([newMessage]);
       if (error) {
         console.error('Error sending message:', error);
       }
@@ -206,7 +209,7 @@ export function useChatRoom(roomId: string) {
         return;
       }
 
-      const { error } = await supabase.from('reactions').insert([newReaction]);
+      const { error } = await (supabase!.from('reactions') as any).insert([newReaction]);
       if (error) {
         console.error('Error adding reaction:', error);
       }
@@ -231,7 +234,7 @@ export function useChatRoom(roomId: string) {
         return;
       }
 
-      const { error } = await supabase.from('message_reactions').insert([newReaction]);
+      const { error } = await (supabase!.from('message_reactions') as any).insert([newReaction]);
       if (error) {
         console.error('Error adding message reaction:', error);
       }
