@@ -37,6 +37,7 @@ export default function RoomClient({ roomId }: RoomClientProps) {
   const [isHostLinkCopied, setIsHostLinkCopied] = useState(false);
   const [flyingEmojis, setFlyingEmojis] = useState<FlyingEmoji[]>([]);
   const [canNavigateHome, setCanNavigateHome] = useState(false);
+  const [showSharePanel, setShowSharePanel] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const [isComposing, setIsComposing] = useState(false);
@@ -236,99 +237,82 @@ export default function RoomClient({ roomId }: RoomClientProps) {
       className="flex flex-col min-h-screen bg-gradient-to-br from-corp-gray-50 via-white to-corp-gray-100 dark:from-corp-gray-900 dark:via-corp-gray-900 dark:to-corp-gray-800 overflow-x-hidden"
       style={{ height: '100dvh' }}
     >
-      <header className="flex flex-col gap-3 p-3 sm:p-4 bg-white/90 dark:bg-corp-gray-800/90 backdrop-blur shadow-md z-10 shrink-0 border-b border-corp-gray-200/60 dark:border-corp-gray-700/60">
-        <div className="flex items-center justify-between gap-3">
+      <header className="flex flex-col gap-2 p-3 bg-white/90 dark:bg-corp-gray-800/90 backdrop-blur shadow-md z-10 shrink-0 border-b border-corp-gray-200/60 dark:border-corp-gray-700/60">
+        <div className="flex items-center justify-between gap-2">
           {canNavigateHome ? (
             <Link
               href="/"
-              className="flex items-center gap-2 text-corp-blue-light hover:text-corp-blue transition-colors"
+              className="flex items-center gap-1 text-corp-blue-light hover:text-corp-blue transition-colors"
             >
-              <BackIcon className="w-6 h-6" />
-              <span className="font-semibold hidden sm:inline">ホームに戻る</span>
+              <BackIcon className="w-5 h-5" />
             </Link>
           ) : (
-            <div className="w-6 shrink-0" aria-hidden />
+            <div className="w-5 shrink-0" aria-hidden />
           )}
-          <div className="flex-1 text-center">
-            <p className="text-xs uppercase tracking-wide text-corp-gray-700 dark:text-corp-gray-300">
-              ライブディスカッション
-            </p>
+          <div className="flex-1 text-center min-w-0">
             <h1
-              className="text-xl sm:text-2xl font-extrabold text-corp-gray-900 dark:text-white truncate"
+              className="text-lg font-bold text-corp-gray-900 dark:text-white truncate"
               title={decodedRoomId}
             >
-              <span className="text-corp-gray-700 dark:text-corp-gray-300">ルーム:</span>{' '}
               {decodedRoomId}
             </h1>
           </div>
-          <div className="flex items-center gap-3 text-xs text-corp-gray-700 dark:text-corp-gray-200">
-            <div className="flex flex-col items-end">
-              <span className="px-2 py-1 bg-corp-gray-100 dark:bg-corp-gray-700 rounded-full font-semibold">
-                {totalMessageCount} 件
-              </span>
-              <span className="px-2 py-1 bg-corp-gray-100 dark:bg-corp-gray-700 rounded-full font-semibold mt-1">
-                リアクション {totalReactionCount}
-              </span>
-            </div>
-          </div>
+          {isHostMode && (
+            <button
+              onClick={() => setShowSharePanel(!showSharePanel)}
+              className="p-2 rounded-full bg-corp-blue-light text-white hover:bg-corp-blue transition-all active:scale-95"
+              aria-label="共有リンクを表示"
+            >
+              <ShareIcon className="w-5 h-5" />
+            </button>
+          )}
         </div>
 
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-center gap-2 sm:gap-3">
-          <div className="flex flex-1 gap-2">
+        {isHostMode && showSharePanel && (
+          <div className="flex flex-col gap-2 p-3 bg-corp-gray-50 dark:bg-corp-gray-700/50 rounded-lg">
             <button
               onClick={handleShare}
-              className="flex-1 flex items-center justify-center gap-2 px-3 sm:px-4 py-2 text-sm font-semibold bg-white dark:bg-corp-gray-700 border border-corp-gray-200 dark:border-corp-gray-600 text-corp-gray-800 dark:text-white rounded-lg hover:bg-corp-gray-100 dark:hover:bg-corp-gray-600 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-corp-blue-light"
+              className="flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold bg-white dark:bg-corp-gray-700 border border-corp-gray-200 dark:border-corp-gray-600 text-corp-gray-800 dark:text-white rounded-lg hover:bg-corp-gray-100 dark:hover:bg-corp-gray-600 transition-colors active:scale-95"
             >
               {isCopied ? <CheckIcon className="w-5 h-5" /> : <ShareIcon className="w-5 h-5" />}
-              <span>{isCopied ? '参加リンクをコピー済み' : '参加リンクを共有'}</span>
+              <span>{isCopied ? 'コピー済み' : '👥 参加用リンク'}</span>
             </button>
             <button
               onClick={handleHostShare}
-              className="flex-1 flex items-center justify-center gap-2 px-3 sm:px-4 py-2 text-sm font-semibold bg-corp-blue-light text-white rounded-lg hover:bg-corp-blue transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-corp-blue-light"
+              className="flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold bg-corp-blue-light text-white rounded-lg hover:bg-corp-blue transition-colors active:scale-95"
             >
               {isHostLinkCopied ? (
                 <CheckIcon className="w-5 h-5" />
               ) : (
                 <ShareIcon className="w-5 h-5" />
               )}
-              <span>{isHostLinkCopied ? 'ホストリンクをコピー済み' : 'ホスト専用リンクを共有'}</span>
+              <span>{isHostLinkCopied ? 'コピー済み' : '👑 ホスト用リンク'}</span>
             </button>
           </div>
-          <p className="text-xs text-corp-gray-700 dark:text-corp-gray-300 text-center px-2">
-            ホストリンクで入室した場合のみ、名前付きで投稿できます。オーナー権限の共有にもお使いください。
-          </p>
-        </div>
+        )}
       </header>
 
       {(isHostMode || isDemoMode) && (
         <div className="bg-gradient-to-r from-yellow-50 via-white to-blue-50 dark:from-corp-gray-800 dark:via-corp-gray-800 dark:to-corp-gray-700 border-b border-corp-gray-200 dark:border-corp-gray-700">
-          <div className="max-w-4xl mx-auto px-4 py-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex flex-wrap items-center gap-2 text-sm text-corp-gray-700 dark:text-corp-gray-200">
-              {isHostMode && (
-                <span className="px-2 py-0.5 text-xs font-bold bg-yellow-400 text-corp-gray-900 rounded-full">
-                  ホストモード
-                </span>
-              )}
-              {isDemoMode && (
-                <span className="px-2 py-0.5 text-xs font-bold bg-corp-blue-light text-white rounded-full">
-                  デモモード
-                </span>
-              )}
-              <span className="font-semibold">講演者や事務局の身分表示をオンにして投稿できます。</span>
-            </div>
+          <div className="px-3 py-2 flex items-center gap-2">
             {isHostMode && (
-              <div className="flex items-center gap-2 w-full sm:w-auto">
-                <input
-                  value={hostName}
-                  onChange={(e) => setHostName(e.target.value)}
-                  className="flex-1 sm:flex-none px-3 py-2 text-sm rounded-lg border border-corp-gray-200 dark:border-corp-gray-600 bg-white dark:bg-corp-gray-800 text-corp-gray-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-corp-blue-light"
-                  placeholder="ホスト名"
-                  aria-label="ホスト名"
-                />
-                <span className="text-xs text-corp-gray-700 dark:text-corp-gray-300">
-                  例: 司会 / 講演者 / 事務局
-                </span>
-              </div>
+              <span className="px-2 py-0.5 text-xs font-bold bg-yellow-400 text-corp-gray-900 rounded-full">
+                👑 ホスト
+              </span>
+            )}
+            {isDemoMode && (
+              <span className="px-2 py-0.5 text-xs font-bold bg-corp-blue-light text-white rounded-full">
+                デモ
+              </span>
+            )}
+            {isHostMode && (
+              <input
+                value={hostName}
+                onChange={(e) => setHostName(e.target.value)}
+                className="flex-1 px-3 py-1.5 text-sm rounded-lg border border-corp-gray-200 dark:border-corp-gray-600 bg-white dark:bg-corp-gray-800 text-corp-gray-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-corp-blue-light"
+                placeholder="あなたの名前"
+                aria-label="ホスト名"
+              />
             )}
           </div>
         </div>

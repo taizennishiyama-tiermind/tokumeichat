@@ -25,18 +25,26 @@ export default function HomeClient() {
     localStorage.setItem('recentRooms', JSON.stringify(updatedRooms));
   };
 
-  const navigateToRoom = (room: string) => {
+  const navigateToRoom = (room: string, isNewRoom: boolean = false) => {
     saveRoomToLocalStorage(room);
     const allowHomeKey = `allowHomeNavigation:${room}`;
     sessionStorage.setItem(allowHomeKey, 'true');
-    router.push(`/room/${encodeURIComponent(room)}`);
+
+    // 新規ルーム作成時はホストモードで入室
+    if (isNewRoom) {
+      const hostParams = new URLSearchParams({ host: '1' });
+      router.push(`/room/${encodeURIComponent(room)}?${hostParams.toString()}`);
+    } else {
+      router.push(`/room/${encodeURIComponent(room)}`);
+    }
   };
 
   const handleJoinRoom = (e: React.FormEvent) => {
     e.preventDefault();
     const trimmedRoom = roomName.trim();
     if (trimmedRoom) {
-      navigateToRoom(trimmedRoom);
+      // ルーム名を入力して作成・参加する場合は新規作成として扱う
+      navigateToRoom(trimmedRoom, true);
     }
   };
 

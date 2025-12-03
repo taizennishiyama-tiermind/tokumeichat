@@ -45,8 +45,8 @@ export default function MessageItem({
   const urlOrMentionRegex = /((https?:\/\/|www\.)[^\s]+)|(@[^\s@]+)/gi;
 
   const linkClassName = isSender
-    ? 'underline text-white decoration-white/70 underline-offset-2 hover:decoration-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70'
-    : 'underline text-corp-blue-light hover:text-corp-blue focus:outline-none focus-visible:ring-2 focus-visible:ring-corp-blue-light/60';
+    ? 'underline text-white decoration-white/70 underline-offset-2 hover:decoration-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 break-all'
+    : 'underline text-corp-blue-light hover:text-corp-blue focus:outline-none focus-visible:ring-2 focus-visible:ring-corp-blue-light/60 break-all';
 
   const renderRichText = () => {
     const nodes: Array<string | JSX.Element> = [];
@@ -128,12 +128,16 @@ export default function MessageItem({
       >
         <div className="relative">
           <div
-            className={`w-full px-4 py-3 rounded-2xl break-words overflow-hidden ${
+            className={`w-full px-4 py-3 rounded-2xl overflow-hidden ${
               isSender
                 ? 'bg-corp-blue-light text-white rounded-br-none'
                 : 'bg-white dark:bg-corp-gray-700 text-corp-gray-800 dark:text-corp-gray-200 rounded-bl-none shadow-md'
             }`}
-            style={{ overflowWrap: 'anywhere' }}
+            style={{
+              overflowWrap: 'break-word',
+              wordBreak: 'break-word',
+              wordWrap: 'break-word',
+            }}
           >
             <div className="flex items-center gap-2 mb-2">
               {is_host && (
@@ -173,46 +177,41 @@ export default function MessageItem({
         </div>
 
         <div className="flex flex-col sm:flex-row sm:items-center gap-2 mt-2">
-          <div className="flex flex-wrap items-center gap-2">
-            {reactionOrder.map((type) => {
-              const count = reactionCounts[type] || 0;
-              const active = count > 0;
-              return (
-                <div
-                  key={type}
-                  className={`flex items-center gap-1 px-2 py-1 rounded-full border ${
-                    active
-                      ? 'bg-corp-gray-100 dark:bg-corp-gray-800 border-corp-gray-200 dark:border-corp-gray-600'
-                      : 'bg-white dark:bg-corp-gray-800 border-corp-gray-200/70 dark:border-corp-gray-700/70 opacity-70'
-                  }`}
-                  title={`${reactionPalette[type].label}: ${count}件`}
-                >
-                  <span className="text-xs">{reactionPalette[type].emoji}</span>
-                  <span className="text-xs font-semibold text-corp-gray-700 dark:text-corp-gray-300">
-                    {count}
-                  </span>
-                </div>
-              );
-            })}
-            <span className="px-2 py-1 text-[11px] font-semibold text-corp-gray-700 dark:text-corp-gray-200 bg-corp-gray-100 dark:bg-corp-gray-800 rounded-full border border-corp-gray-200 dark:border-corp-gray-700">
-              合計 {totalReactions} 件{' '}
-              {hasReacted && <span className="text-corp-blue-light">(あなたもリアクション済み)</span>}
-            </span>
-          </div>
+          {totalReactions > 0 && (
+            <div className="flex flex-wrap items-center gap-2">
+              {reactionOrder.map((type) => {
+                const count = reactionCounts[type] || 0;
+                if (count === 0) return null;
+                return (
+                  <div
+                    key={type}
+                    className="flex items-center gap-1 px-2 py-1 rounded-full border bg-corp-gray-100 dark:bg-corp-gray-800 border-corp-gray-200 dark:border-corp-gray-600"
+                    title={`${reactionPalette[type].label}: ${count}件`}
+                  >
+                    <span className="text-sm">{reactionPalette[type].emoji}</span>
+                    <span className="text-xs font-semibold text-corp-gray-700 dark:text-corp-gray-300">
+                      {count}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
 
           <div
             className={`px-1 text-xs text-corp-gray-700 dark:text-corp-gray-300 flex items-center gap-2 ${isSender ? 'justify-end' : 'justify-start'} w-full sm:w-auto`}
           >
-            <span className="hidden sm:inline">·</span>
             <span>{time}</span>
             {onReact && (
               <>
-                <span className="hidden sm:inline">·</span>
+                <span>·</span>
                 <button
                   onClick={() => setShowReactionPicker(!showReactionPicker)}
-                  className="text-corp-gray-600 dark:text-corp-gray-400 hover:text-corp-blue-light dark:hover:text-corp-blue-light font-semibold transition-colors"
+                  className="flex items-center gap-1 text-corp-gray-600 dark:text-corp-gray-400 hover:text-corp-blue-light dark:hover:text-corp-blue-light font-semibold transition-colors"
+                  aria-label="リアクションを送る"
                 >
-                  リアクションを送る
+                  <span className="text-base">😊</span>
+                  <span className="text-[11px]">+</span>
                 </button>
               </>
             )}
