@@ -118,7 +118,7 @@ export default function MessageItem({
     }
   };
 
-  const displayName = is_host && host_name ? host_name : user_id;
+  const displayName = is_host && host_name ? host_name : null;
   const isMentioned = mentions.includes(currentUserId);
 
   return (
@@ -145,9 +145,11 @@ export default function MessageItem({
                   ホスト
                 </span>
               )}
-              <span className="text-xs font-semibold text-corp-gray-700 dark:text-corp-gray-200">
-                {displayName}
-              </span>
+              {displayName && (
+                <span className="text-xs font-semibold text-corp-gray-700 dark:text-corp-gray-200">
+                  {displayName}
+                </span>
+              )}
               {isMentioned && (
                 <span className="px-2 py-0.5 text-[11px] font-bold bg-corp-blue-light text-white rounded-full">
                   あなた宛
