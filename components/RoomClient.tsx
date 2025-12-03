@@ -45,6 +45,7 @@ export default function RoomClient({ roomId }: RoomClientProps) {
   const [mentionQuery, setMentionQuery] = useState('');
   const [mentionStart, setMentionStart] = useState<number | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [viewportHeight, setViewportHeight] = useState<number | null>(null);
 
   const isHostMode = searchParams.get('host') === '1';
   const totalMessageCount = messages.length;
@@ -89,6 +90,28 @@ export default function RoomClient({ roomId }: RoomClientProps) {
     setCanNavigateHome(storedValue);
   }, [decodedRoomId]);
 
+  // Handle Android keyboard overlap by tracking visual viewport
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.visualViewport) return;
+
+    const handleResize = () => {
+      if (window.visualViewport) {
+        setViewportHeight(window.visualViewport.height);
+      }
+    };
+
+    // Set initial height
+    handleResize();
+
+    window.visualViewport.addEventListener('resize', handleResize);
+    window.visualViewport.addEventListener('scroll', handleResize);
+
+    return () => {
+      window.visualViewport?.removeEventListener('resize', handleResize);
+      window.visualViewport?.removeEventListener('scroll', handleResize);
+    };
+  }, []);
+
   const participants = useMemo(() => {
     const map = new Map<string, { id: string; display: string; isHost?: boolean }>();
     messages.forEach((m) => {
@@ -115,6 +138,10 @@ export default function RoomClient({ roomId }: RoomClientProps) {
         setNewMessage('');
         setMentionQuery('');
         setMentionStart(null);
+        // Reset textarea height after sending
+        if (textareaRef.current) {
+          textareaRef.current.style.height = 'auto';
+        }
       }
     },
     [newMessage, isComposing, sendMessage, participants, isHostMode, hostName]
@@ -213,6 +240,12 @@ export default function RoomClient({ roomId }: RoomClientProps) {
       setMentionStart(null);
     }
     setNewMessage(value);
+
+    // Auto-resize textarea and keep it in view on Android
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 120)}px`;
+    }
   };
 
   const insertMention = (display: string) => {
@@ -235,7 +268,11 @@ export default function RoomClient({ roomId }: RoomClientProps) {
   return (
     <div
       className="flex flex-col bg-gradient-to-br from-corp-gray-50 via-white to-corp-gray-100 dark:from-corp-gray-900 dark:via-corp-gray-900 dark:to-corp-gray-800"
-      style={{ height: '100dvh', width: '100dvw', overflow: 'hidden' }}
+      style={{
+        height: viewportHeight ? `${viewportHeight}px` : '100dvh',
+        width: '100dvw',
+        overflow: 'hidden'
+      }}
     >
       <header className="flex flex-col gap-2 p-3 bg-white/90 dark:bg-corp-gray-800/90 backdrop-blur shadow-md z-10 shrink-0 border-b border-corp-gray-200/60 dark:border-corp-gray-700/60">
         <div className="flex items-center justify-between gap-2">
@@ -368,6 +405,15 @@ export default function RoomClient({ roomId }: RoomClientProps) {
                     e.preventDefault();
                     handleSendMessage(e);
                   }
+                }}
+                onFocus={() => {
+                  // Scroll the textarea into view when focused (helps with Android keyboard)
+                  setTimeout(() => {
+                    textareaRef.current?.scrollIntoView({
+                      behavior: 'smooth',
+                      block: 'nearest'
+                    });
+                  }, 300);
                 }}
                 onCompositionStart={() => setIsComposing(true)}
                 onCompositionEnd={() => setIsComposing(false)}
