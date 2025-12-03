@@ -46,10 +46,21 @@ export default function RoomClient({ roomId }: RoomClientProps) {
   const [mentionStart, setMentionStart] = useState<number | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [keyboardOffset, setKeyboardOffset] = useState(0);
+  const [isIOSChrome, setIsIOSChrome] = useState(false);
 
   const isHostMode = searchParams.get('host') === '1';
   const totalMessageCount = messages.length;
   const totalReactionCount = reactions.length + messageReactions.length;
+
+  // Detect iOS Chrome
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const ua = window.navigator.userAgent;
+      // iOS Chrome contains 'CriOS' in user agent
+      const isiOSChrome = /CriOS/.test(ua);
+      setIsIOSChrome(isiOSChrome);
+    }
+  }, []);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -90,7 +101,7 @@ export default function RoomClient({ roomId }: RoomClientProps) {
     setCanNavigateHome(storedValue);
   }, [decodedRoomId]);
 
-  // Handle Android keyboard overlap by calculating keyboard height
+  // Handle Android and iOS Chrome keyboard overlap by calculating keyboard height
   useEffect(() => {
     if (typeof window === 'undefined' || !window.visualViewport) return;
 
@@ -100,6 +111,18 @@ export default function RoomClient({ roomId }: RoomClientProps) {
         // This gives us the keyboard height
         const offset = window.innerHeight - window.visualViewport.height;
         setKeyboardOffset(offset);
+
+        // For iOS Chrome, also ensure the input stays visible when keyboard opens
+        if (isIOSChrome && offset > 0 && textareaRef.current) {
+          setTimeout(() => {
+            if (textareaRef.current && document.activeElement === textareaRef.current) {
+              textareaRef.current.scrollIntoView({
+                behavior: 'smooth',
+                block: 'center',
+              });
+            }
+          }, 100);
+        }
       }
     };
 
@@ -113,7 +136,7 @@ export default function RoomClient({ roomId }: RoomClientProps) {
       window.visualViewport?.removeEventListener('resize', handleResize);
       window.visualViewport?.removeEventListener('scroll', handleResize);
     };
-  }, []);
+  }, [isIOSChrome]);
 
   const participants = useMemo(() => {
     const map = new Map<string, { id: string; display: string; isHost?: boolean }>();
@@ -411,8 +434,18 @@ export default function RoomClient({ roomId }: RoomClientProps) {
                   }
                 }}
                 onFocus={() => {
-                  // Let the browser handle scroll naturally with keyboard
-                  // The paddingBottom adjustment will ensure the input stays visible
+                  // iOS Chrome needs explicit scrolling to keep input visible
+                  if (isIOSChrome && textareaRef.current) {
+                    // Wait for keyboard to appear and then scroll
+                    setTimeout(() => {
+                      if (textareaRef.current) {
+                        textareaRef.current.scrollIntoView({
+                          behavior: 'smooth',
+                          block: 'center',
+                        });
+                      }
+                    }, 300);
+                  }
                 }}
                 onCompositionStart={() => setIsComposing(true)}
                 onCompositionEnd={() => setIsComposing(false)}
