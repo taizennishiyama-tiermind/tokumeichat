@@ -45,7 +45,7 @@ export default function RoomClient({ roomId }: RoomClientProps) {
   const [mentionQuery, setMentionQuery] = useState('');
   const [mentionStart, setMentionStart] = useState<number | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const [viewportHeight, setViewportHeight] = useState<number | null>(null);
+  const [keyboardOffset, setKeyboardOffset] = useState(0);
 
   const isHostMode = searchParams.get('host') === '1';
   const totalMessageCount = messages.length;
@@ -90,17 +90,20 @@ export default function RoomClient({ roomId }: RoomClientProps) {
     setCanNavigateHome(storedValue);
   }, [decodedRoomId]);
 
-  // Handle Android keyboard overlap by tracking visual viewport
+  // Handle Android keyboard overlap by calculating keyboard height
   useEffect(() => {
     if (typeof window === 'undefined' || !window.visualViewport) return;
 
     const handleResize = () => {
       if (window.visualViewport) {
-        setViewportHeight(window.visualViewport.height);
+        // Calculate the difference between window and visual viewport
+        // This gives us the keyboard height
+        const offset = window.innerHeight - window.visualViewport.height;
+        setKeyboardOffset(offset);
       }
     };
 
-    // Set initial height
+    // Set initial offset
     handleResize();
 
     window.visualViewport.addEventListener('resize', handleResize);
@@ -269,9 +272,10 @@ export default function RoomClient({ roomId }: RoomClientProps) {
     <div
       className="flex flex-col bg-gradient-to-br from-corp-gray-50 via-white to-corp-gray-100 dark:from-corp-gray-900 dark:via-corp-gray-900 dark:to-corp-gray-800"
       style={{
-        height: viewportHeight ? `${viewportHeight}px` : '100dvh',
+        height: '100dvh',
         width: '100dvw',
-        overflow: 'hidden'
+        overflow: 'hidden',
+        paddingBottom: keyboardOffset > 0 ? `${keyboardOffset}px` : '0'
       }}
     >
       <header className="flex flex-col gap-2 p-3 bg-white/90 dark:bg-corp-gray-800/90 backdrop-blur shadow-md z-10 shrink-0 border-b border-corp-gray-200/60 dark:border-corp-gray-700/60">
@@ -407,13 +411,8 @@ export default function RoomClient({ roomId }: RoomClientProps) {
                   }
                 }}
                 onFocus={() => {
-                  // Scroll the textarea into view when focused (helps with Android keyboard)
-                  setTimeout(() => {
-                    textareaRef.current?.scrollIntoView({
-                      behavior: 'smooth',
-                      block: 'nearest'
-                    });
-                  }, 300);
+                  // Let the browser handle scroll naturally with keyboard
+                  // The paddingBottom adjustment will ensure the input stays visible
                 }}
                 onCompositionStart={() => setIsComposing(true)}
                 onCompositionEnd={() => setIsComposing(false)}
