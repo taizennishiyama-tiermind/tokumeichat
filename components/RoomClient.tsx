@@ -234,8 +234,8 @@ export default function RoomClient({ roomId }: RoomClientProps) {
 
   return (
     <div
-      className="flex flex-col min-h-screen bg-gradient-to-br from-corp-gray-50 via-white to-corp-gray-100 dark:from-corp-gray-900 dark:via-corp-gray-900 dark:to-corp-gray-800 overflow-x-hidden"
-      style={{ height: '100dvh' }}
+      className="flex flex-col bg-gradient-to-br from-corp-gray-50 via-white to-corp-gray-100 dark:from-corp-gray-900 dark:via-corp-gray-900 dark:to-corp-gray-800"
+      style={{ height: '100dvh', width: '100dvw', overflow: 'hidden' }}
     >
       <header className="flex flex-col gap-2 p-3 bg-white/90 dark:bg-corp-gray-800/90 backdrop-blur shadow-md z-10 shrink-0 border-b border-corp-gray-200/60 dark:border-corp-gray-700/60">
         <div className="flex items-center justify-between gap-2">
@@ -321,8 +321,12 @@ export default function RoomClient({ roomId }: RoomClientProps) {
       <Dashboard messages={messages} reactions={reactions} />
 
       <main
-        className="flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-6"
-        style={{ WebkitOverflowScrolling: 'touch' }}
+        className="flex-1 overflow-y-auto p-3 sm:p-6"
+        style={{
+          WebkitOverflowScrolling: 'touch',
+          overflowX: 'hidden',
+          maxHeight: '100%'
+        }}
       >
         <div className="max-w-4xl mx-auto space-y-4 sm:space-y-6 w-full" aria-live="polite">
           {messages.length === 0 && (
@@ -369,7 +373,7 @@ export default function RoomClient({ roomId }: RoomClientProps) {
                 onCompositionEnd={() => setIsComposing(false)}
                 placeholder={isHostMode ? `${hostName}として投稿...` : '匿名でメッセージを送信...'}
                 rows={1}
-                className="flex-1 w-full min-h-[2.5rem] sm:min-h-[3rem] p-2 sm:p-3 text-sm sm:text-base bg-corp-gray-100 dark:bg-corp-gray-700 border-2 border-transparent focus:border-corp-blue-light focus:ring-0 rounded-lg resize-none transition"
+                className="flex-1 w-full min-h-[2.5rem] sm:min-h-[3rem] p-2 sm:p-3 text-sm sm:text-base bg-corp-gray-100 dark:bg-corp-gray-700 border-2 border-transparent focus:border-corp-blue-light focus:ring-0 rounded-lg resize-none transition text-corp-gray-800"
                 style={{ maxHeight: '120px' }}
               />
               {mentionStart !== null && mentionCandidates.length > 0 && (
@@ -410,31 +414,27 @@ export default function RoomClient({ roomId }: RoomClientProps) {
           <div className="order-2 sm:order-1 w-full sm:w-auto">
             <div className="flex flex-wrap gap-2 w-full sm:w-auto p-2 bg-white/90 dark:bg-corp-gray-700/80 border border-corp-gray-200 dark:border-corp-gray-600 rounded-2xl shadow-md sm:shadow-none sm:bg-transparent sm:dark:bg-transparent sm:border-none">
               {reactionButtons.map(({ type, emoji, label, borderClass, hoverClass }) => (
-                <div key={type} className="flex flex-col items-center flex-1 min-w-[64px] sm:min-w-0 sm:w-auto">
-                  <button
-                    onClick={() => handleReactionClick(type, emoji)}
-                    aria-label={`${label}を送る`}
-                    className={`relative w-full max-w-[72px] h-12 sm:w-12 sm:h-12 flex items-center justify-center bg-white/90 dark:bg-corp-gray-700 border ${borderClass} rounded-full ${hoverClass} transition-all transform hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-corp-gray-800`}
-                  >
-                    <span className="text-xl sm:text-2xl" aria-hidden>
-                      {emoji}
-                    </span>
-                    {flyingEmojis
-                      .filter((fe) => fe.type === type)
-                      .map((fe) => (
-                        <span
-                          key={fe.id}
-                          className="absolute bottom-full left-1/2 -translate-x-1/2 text-2xl sm:text-3xl pointer-events-none animate-fly-up"
-                          style={{ userSelect: 'none' }}
-                        >
-                          {fe.emoji}
-                        </span>
-                      ))}
-                  </button>
-                  <span className="mt-1 text-[11px] font-semibold text-corp-gray-700 dark:text-corp-gray-200 sm:hidden">
-                    {label}
+                <button
+                  key={type}
+                  onClick={() => handleReactionClick(type, emoji)}
+                  aria-label={`${label}を送る`}
+                  className={`relative w-12 h-12 flex items-center justify-center bg-white/90 dark:bg-corp-gray-700 border ${borderClass} rounded-full ${hoverClass} transition-all transform hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-corp-gray-800`}
+                >
+                  <span className="text-2xl" aria-hidden>
+                    {emoji}
                   </span>
-                </div>
+                  {flyingEmojis
+                    .filter((fe) => fe.type === type)
+                    .map((fe) => (
+                      <span
+                        key={fe.id}
+                        className="absolute bottom-full left-1/2 -translate-x-1/2 text-3xl pointer-events-none animate-fly-up"
+                        style={{ userSelect: 'none' }}
+                      >
+                        {fe.emoji}
+                      </span>
+                    ))}
+                </button>
               ))}
             </div>
           </div>

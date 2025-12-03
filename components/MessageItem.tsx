@@ -207,11 +207,10 @@ export default function MessageItem({
                 <span>·</span>
                 <button
                   onClick={() => setShowReactionPicker(!showReactionPicker)}
-                  className="flex items-center gap-1 text-corp-gray-600 dark:text-corp-gray-400 hover:text-corp-blue-light dark:hover:text-corp-blue-light font-semibold transition-colors"
+                  className="flex items-center gap-1 text-corp-gray-400 dark:text-corp-gray-500 hover:text-corp-blue-light dark:hover:text-corp-blue-light font-semibold transition-colors opacity-60 hover:opacity-100"
                   aria-label="リアクションを送る"
                 >
                   <span className="text-base">😊</span>
-                  <span className="text-[11px]">+</span>
                 </button>
               </>
             )}
