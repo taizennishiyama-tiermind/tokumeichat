@@ -90,7 +90,12 @@ export function useChatRoom(roomId: string) {
 
     if (!isDemoMode && supabase) {
       const messageChannel = supabase!
-        .channel(`messages-${roomId}`)
+        .channel(`messages-${roomId}`, {
+          config: {
+            broadcast: { self: false },
+            presence: { key: '' },
+          },
+        })
         .on(
           'postgres_changes',
           {
@@ -114,10 +119,23 @@ export function useChatRoom(roomId: string) {
             });
           }
         )
-        .subscribe();
+        .subscribe((status) => {
+          if (status === 'SUBSCRIBED') {
+            console.log('Messages channel subscribed successfully');
+          } else if (status === 'CHANNEL_ERROR') {
+            console.error('Messages channel error, retrying...');
+          } else if (status === 'TIMED_OUT') {
+            console.error('Messages channel timed out, retrying...');
+          }
+        });
 
       const reactionChannel = supabase!
-        .channel(`reactions-${roomId}`)
+        .channel(`reactions-${roomId}`, {
+          config: {
+            broadcast: { self: false },
+            presence: { key: '' },
+          },
+        })
         .on(
           'postgres_changes',
           {
@@ -134,10 +152,23 @@ export function useChatRoom(roomId: string) {
             });
           }
         )
-        .subscribe();
+        .subscribe((status) => {
+          if (status === 'SUBSCRIBED') {
+            console.log('Reactions channel subscribed successfully');
+          } else if (status === 'CHANNEL_ERROR') {
+            console.error('Reactions channel error, retrying...');
+          } else if (status === 'TIMED_OUT') {
+            console.error('Reactions channel timed out, retrying...');
+          }
+        });
 
       const messageReactionChannel = supabase!
-        .channel(`message-reactions-${roomId}`)
+        .channel(`message-reactions-${roomId}`, {
+          config: {
+            broadcast: { self: false },
+            presence: { key: '' },
+          },
+        })
         .on(
           'postgres_changes',
           {
@@ -154,9 +185,36 @@ export function useChatRoom(roomId: string) {
             });
           }
         )
-        .subscribe();
+        .subscribe((status) => {
+          if (status === 'SUBSCRIBED') {
+            console.log('Message reactions channel subscribed successfully');
+          } else if (status === 'CHANNEL_ERROR') {
+            console.error('Message reactions channel error, retrying...');
+          } else if (status === 'TIMED_OUT') {
+            console.error('Message reactions channel timed out, retrying...');
+          }
+        });
+
+      // ページが再表示された時にデータを再取得（モバイル対応）
+      const handleVisibilityChange = () => {
+        if (document.visibilityState === 'visible') {
+          console.log('Page became visible, refreshing data...');
+          fetchInitialData();
+        }
+      };
+
+      // オンライン復帰時にデータを再取得（ネットワーク復帰対応）
+      const handleOnline = () => {
+        console.log('Network restored, refreshing data...');
+        fetchInitialData();
+      };
+
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+      window.addEventListener('online', handleOnline);
 
       return () => {
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+        window.removeEventListener('online', handleOnline);
         if (supabase) {
           supabase.removeChannel(messageChannel);
           supabase.removeChannel(reactionChannel);
