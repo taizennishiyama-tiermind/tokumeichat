@@ -26,6 +26,7 @@ export function useChatRoom(roomId: string) {
     const fetchInitialData = async () => {
       if (isDemoMode || !supabase) {
         const now = new Date().toISOString();
+        console.warn('⚠️ Running in DEMO mode - Supabase not configured');
         setMessages([
           {
             id: 'system-info',
@@ -41,6 +42,8 @@ export function useChatRoom(roomId: string) {
         ]);
         return;
       }
+
+      console.log('🔄 Fetching initial data for room:', roomId);
 
       const [messagesResult, reactionsResult, messageReactionsResult] = await Promise.all([
         supabase!
@@ -61,9 +64,11 @@ export function useChatRoom(roomId: string) {
       ]);
 
       if (messagesResult.error) {
-        console.error('Error fetching messages:', messagesResult.error);
+        console.error('❌ Error fetching messages:', messagesResult.error);
+        console.error('Error details:', JSON.stringify(messagesResult.error, null, 2));
       } else {
         const messages = (messagesResult.data || []) as Message[];
+        console.log(`✅ Fetched ${messages.length} messages`);
         setMessages(
           messages.map((m) => ({
             ...m,
@@ -74,14 +79,18 @@ export function useChatRoom(roomId: string) {
       }
 
       if (reactionsResult.error) {
-        console.error('Error fetching reactions:', reactionsResult.error);
+        console.error('❌ Error fetching reactions:', reactionsResult.error);
+        console.error('Error details:', JSON.stringify(reactionsResult.error, null, 2));
       } else {
+        console.log(`✅ Fetched ${reactionsResult.data?.length || 0} reactions`);
         setReactions(reactionsResult.data || []);
       }
 
       if (messageReactionsResult.error) {
-        console.error('Error fetching message reactions:', messageReactionsResult.error);
+        console.error('❌ Error fetching message reactions:', messageReactionsResult.error);
+        console.error('Error details:', JSON.stringify(messageReactionsResult.error, null, 2));
       } else {
+        console.log(`✅ Fetched ${messageReactionsResult.data?.length || 0} message reactions`);
         setMessageReactions(messageReactionsResult.data || []);
       }
     };
@@ -105,9 +114,13 @@ export function useChatRoom(roomId: string) {
             filter: `room_id=eq.${roomId}`,
           },
           (payload) => {
+            console.log('📨 Received new message from realtime:', payload.new);
             const newMessage = payload.new as Message;
             setMessages((prev) => {
-              if (prev.some((m) => m.id === newMessage.id)) return prev;
+              if (prev.some((m) => m.id === newMessage.id)) {
+                console.log('⚠️ Duplicate message detected, skipping:', newMessage.id);
+                return prev;
+              }
               return [
                 ...prev,
                 {
@@ -120,12 +133,13 @@ export function useChatRoom(roomId: string) {
           }
         )
         .subscribe((status) => {
+          console.log('📡 Messages channel status:', status);
           if (status === 'SUBSCRIBED') {
-            console.log('Messages channel subscribed successfully');
+            console.log('✅ Messages channel subscribed successfully');
           } else if (status === 'CHANNEL_ERROR') {
-            console.error('Messages channel error, retrying...');
+            console.error('❌ Messages channel error, retrying...');
           } else if (status === 'TIMED_OUT') {
-            console.error('Messages channel timed out, retrying...');
+            console.error('⏱️ Messages channel timed out, retrying...');
           }
         });
 
@@ -145,20 +159,25 @@ export function useChatRoom(roomId: string) {
             filter: `room_id=eq.${roomId}`,
           },
           (payload) => {
+            console.log('👍 Received new reaction from realtime:', payload.new);
             const newReaction = payload.new as Reaction;
             setReactions((prev) => {
-              if (prev.some((r) => r.id === newReaction.id)) return prev;
+              if (prev.some((r) => r.id === newReaction.id)) {
+                console.log('⚠️ Duplicate reaction detected, skipping:', newReaction.id);
+                return prev;
+              }
               return [...prev, newReaction];
             });
           }
         )
         .subscribe((status) => {
+          console.log('📡 Reactions channel status:', status);
           if (status === 'SUBSCRIBED') {
-            console.log('Reactions channel subscribed successfully');
+            console.log('✅ Reactions channel subscribed successfully');
           } else if (status === 'CHANNEL_ERROR') {
-            console.error('Reactions channel error, retrying...');
+            console.error('❌ Reactions channel error, retrying...');
           } else if (status === 'TIMED_OUT') {
-            console.error('Reactions channel timed out, retrying...');
+            console.error('⏱️ Reactions channel timed out, retrying...');
           }
         });
 
@@ -178,20 +197,25 @@ export function useChatRoom(roomId: string) {
             filter: `room_id=eq.${roomId}`,
           },
           (payload) => {
+            console.log('💬 Received new message reaction from realtime:', payload.new);
             const newReaction = payload.new as MessageReaction;
             setMessageReactions((prev) => {
-              if (prev.some((r) => r.id === newReaction.id)) return prev;
+              if (prev.some((r) => r.id === newReaction.id)) {
+                console.log('⚠️ Duplicate message reaction detected, skipping:', newReaction.id);
+                return prev;
+              }
               return [...prev, newReaction];
             });
           }
         )
         .subscribe((status) => {
+          console.log('📡 Message reactions channel status:', status);
           if (status === 'SUBSCRIBED') {
-            console.log('Message reactions channel subscribed successfully');
+            console.log('✅ Message reactions channel subscribed successfully');
           } else if (status === 'CHANNEL_ERROR') {
-            console.error('Message reactions channel error, retrying...');
+            console.error('❌ Message reactions channel error, retrying...');
           } else if (status === 'TIMED_OUT') {
-            console.error('Message reactions channel timed out, retrying...');
+            console.error('⏱️ Message reactions channel timed out, retrying...');
           }
         });
 
@@ -240,13 +264,18 @@ export function useChatRoom(roomId: string) {
       };
 
       if (isDemoMode || !supabase) {
+        console.log('📝 Sending message (DEMO mode):', text);
         setMessages((prev) => [...prev, { ...newMessage, isSender: true }]);
         return;
       }
 
-      const { error } = await (supabase!.from('messages') as any).insert([newMessage]);
+      console.log('📤 Sending message to Supabase:', { text, roomId, messageId: newMessage.id });
+      const { error, data } = await (supabase!.from('messages') as any).insert([newMessage]).select();
       if (error) {
-        console.error('Error sending message:', error);
+        console.error('❌ Error sending message:', error);
+        console.error('Error details:', JSON.stringify(error, null, 2));
+      } else {
+        console.log('✅ Message sent successfully:', data);
       }
     },
     [roomId, isDemoMode]
@@ -263,13 +292,18 @@ export function useChatRoom(roomId: string) {
       };
 
       if (isDemoMode || !supabase) {
+        console.log('👍 Adding reaction (DEMO mode):', type);
         setReactions((prev) => [...prev, newReaction]);
         return;
       }
 
-      const { error } = await (supabase!.from('reactions') as any).insert([newReaction]);
+      console.log('📤 Adding reaction to Supabase:', { type, roomId });
+      const { error, data } = await (supabase!.from('reactions') as any).insert([newReaction]).select();
       if (error) {
-        console.error('Error adding reaction:', error);
+        console.error('❌ Error adding reaction:', error);
+        console.error('Error details:', JSON.stringify(error, null, 2));
+      } else {
+        console.log('✅ Reaction added successfully:', data);
       }
     },
     [roomId, isDemoMode]
@@ -288,13 +322,18 @@ export function useChatRoom(roomId: string) {
       };
 
       if (isDemoMode || !supabase) {
+        console.log('👍 Adding message reaction (DEMO mode):', type);
         setMessageReactions((prev) => [...prev, newReaction]);
         return;
       }
 
-      const { error } = await (supabase!.from('message_reactions') as any).insert([newReaction]);
+      console.log('📤 Adding message reaction to Supabase:', { type, messageId, roomId });
+      const { error, data } = await (supabase!.from('message_reactions') as any).insert([newReaction]).select();
       if (error) {
-        console.error('Error adding message reaction:', error);
+        console.error('❌ Error adding message reaction:', error);
+        console.error('Error details:', JSON.stringify(error, null, 2));
+      } else {
+        console.log('✅ Message reaction added successfully:', data);
       }
     },
     [roomId, isDemoMode]
