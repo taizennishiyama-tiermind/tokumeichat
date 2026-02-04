@@ -4,12 +4,16 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { getUserId } from '@/lib/utils';
 import type { Message, Reaction, ReactionType, MessageReaction } from '@/types';
+import type { RealtimeChannel } from '@supabase/supabase-js';
 
 interface SendMessageOptions {
   mentions?: string[];
   isHost?: boolean;
   hostName?: string;
 }
+
+// リトライ用のユーティリティ
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export function useChatRoom(roomId: string) {
   const currentUserIdRef = useRef<string>('');
@@ -18,212 +22,253 @@ export function useChatRoom(roomId: string) {
   const [messageReactions, setMessageReactions] = useState<MessageReaction[]>([]);
   const isDemoMode = !isSupabaseConfigured;
 
+  // チャンネル参照を保持
+  const channelsRef = useRef<RealtimeChannel[]>([]);
+  const isSubscribedRef = useRef(false);
+  const retryCountRef = useRef(0);
+  const maxRetries = 5;
+
   useEffect(() => {
     currentUserIdRef.current = getUserId();
   }, []);
 
-  useEffect(() => {
-    const fetchInitialData = async () => {
-      if (isDemoMode || !supabase) {
-        const now = new Date().toISOString();
-        setMessages([
-          {
-            id: 'system-info',
-            text: '接続設定がまだ行われていないためデモ表示中です。Supabase を設定するとリアルタイム同期が有効になります。',
-            timestamp: now,
-            user_id: 'システムメッセージ',
-            isSender: false,
-            room_id: roomId,
-            is_host: false,
-            host_name: null,
-            mentions: [],
-          },
-        ]);
-        return;
-      }
+  // 初期データ取得
+  const fetchInitialData = useCallback(async () => {
+    if (isDemoMode || !supabase) return;
 
-      const [messagesResult, reactionsResult, messageReactionsResult] = await Promise.all([
-        supabase!
-          .from('messages')
-          .select('*')
-          .eq('room_id', roomId)
-          .order('timestamp', { ascending: true }),
-        supabase!
-          .from('reactions')
-          .select('*')
-          .eq('room_id', roomId)
-          .order('timestamp', { ascending: true }),
-        supabase!
-          .from('message_reactions')
-          .select('*')
-          .eq('room_id', roomId)
-          .order('timestamp', { ascending: true }),
-      ]);
+    const [messagesResult, reactionsResult, messageReactionsResult] = await Promise.all([
+      supabase
+        .from('messages')
+        .select('*')
+        .eq('room_id', roomId)
+        .order('timestamp', { ascending: true }),
+      supabase
+        .from('reactions')
+        .select('*')
+        .eq('room_id', roomId)
+        .order('timestamp', { ascending: true }),
+      supabase
+        .from('message_reactions')
+        .select('*')
+        .eq('room_id', roomId)
+        .order('timestamp', { ascending: true }),
+    ]);
 
-      if (messagesResult.error) {
-        console.error('Error fetching messages:', messagesResult.error);
-      } else {
-        const messages = (messagesResult.data || []) as Message[];
-        setMessages(
-          messages.map((m) => ({
-            ...m,
-            isSender: m.user_id === currentUserIdRef.current,
-            mentions: m.mentions || [],
-          }))
-        );
-      }
+    if (messagesResult.error) {
+      console.error('Error fetching messages:', messagesResult.error);
+    } else {
+      const messages = (messagesResult.data || []) as Message[];
+      setMessages(
+        messages.map((m) => ({
+          ...m,
+          isSender: m.user_id === currentUserIdRef.current,
+          mentions: m.mentions || [],
+        }))
+      );
+    }
 
-      if (reactionsResult.error) {
-        console.error('Error fetching reactions:', reactionsResult.error);
-      } else {
-        setReactions(reactionsResult.data || []);
-      }
+    if (reactionsResult.error) {
+      console.error('Error fetching reactions:', reactionsResult.error);
+    } else {
+      setReactions(reactionsResult.data || []);
+    }
 
-      if (messageReactionsResult.error) {
-        console.error('Error fetching message reactions:', messageReactionsResult.error);
-      } else {
-        setMessageReactions(messageReactionsResult.data || []);
-      }
-    };
-
-    fetchInitialData();
-
-    if (!isDemoMode && supabase) {
-      const messageChannel = supabase!
-        .channel(`messages-${roomId}`, {
-          config: {
-            broadcast: { self: false },
-            presence: { key: '' },
-          },
-        })
-        .on(
-          'postgres_changes',
-          {
-            event: 'INSERT',
-            schema: 'public',
-            table: 'messages',
-            filter: `room_id=eq.${roomId}`,
-          },
-          (payload) => {
-            const newMessage = payload.new as Message;
-            setMessages((prev) => {
-              if (prev.some((m) => m.id === newMessage.id)) return prev;
-              return [
-                ...prev,
-                {
-                  ...newMessage,
-                  isSender: newMessage.user_id === currentUserIdRef.current,
-                  mentions: newMessage.mentions || [],
-                },
-              ];
-            });
-          }
-        )
-        .subscribe((status) => {
-          if (status === 'SUBSCRIBED') {
-            console.log('Messages channel subscribed successfully');
-          } else if (status === 'CHANNEL_ERROR') {
-            console.error('Messages channel error, retrying...');
-          } else if (status === 'TIMED_OUT') {
-            console.error('Messages channel timed out, retrying...');
-          }
-        });
-
-      const reactionChannel = supabase!
-        .channel(`reactions-${roomId}`, {
-          config: {
-            broadcast: { self: false },
-            presence: { key: '' },
-          },
-        })
-        .on(
-          'postgres_changes',
-          {
-            event: 'INSERT',
-            schema: 'public',
-            table: 'reactions',
-            filter: `room_id=eq.${roomId}`,
-          },
-          (payload) => {
-            const newReaction = payload.new as Reaction;
-            setReactions((prev) => {
-              if (prev.some((r) => r.id === newReaction.id)) return prev;
-              return [...prev, newReaction];
-            });
-          }
-        )
-        .subscribe((status) => {
-          if (status === 'SUBSCRIBED') {
-            console.log('Reactions channel subscribed successfully');
-          } else if (status === 'CHANNEL_ERROR') {
-            console.error('Reactions channel error, retrying...');
-          } else if (status === 'TIMED_OUT') {
-            console.error('Reactions channel timed out, retrying...');
-          }
-        });
-
-      const messageReactionChannel = supabase!
-        .channel(`message-reactions-${roomId}`, {
-          config: {
-            broadcast: { self: false },
-            presence: { key: '' },
-          },
-        })
-        .on(
-          'postgres_changes',
-          {
-            event: 'INSERT',
-            schema: 'public',
-            table: 'message_reactions',
-            filter: `room_id=eq.${roomId}`,
-          },
-          (payload) => {
-            const newReaction = payload.new as MessageReaction;
-            setMessageReactions((prev) => {
-              if (prev.some((r) => r.id === newReaction.id)) return prev;
-              return [...prev, newReaction];
-            });
-          }
-        )
-        .subscribe((status) => {
-          if (status === 'SUBSCRIBED') {
-            console.log('Message reactions channel subscribed successfully');
-          } else if (status === 'CHANNEL_ERROR') {
-            console.error('Message reactions channel error, retrying...');
-          } else if (status === 'TIMED_OUT') {
-            console.error('Message reactions channel timed out, retrying...');
-          }
-        });
-
-      // ページが再表示された時にデータを再取得（モバイル対応）
-      const handleVisibilityChange = () => {
-        if (document.visibilityState === 'visible') {
-          console.log('Page became visible, refreshing data...');
-          fetchInitialData();
-        }
-      };
-
-      // オンライン復帰時にデータを再取得（ネットワーク復帰対応）
-      const handleOnline = () => {
-        console.log('Network restored, refreshing data...');
-        fetchInitialData();
-      };
-
-      document.addEventListener('visibilitychange', handleVisibilityChange);
-      window.addEventListener('online', handleOnline);
-
-      return () => {
-        document.removeEventListener('visibilitychange', handleVisibilityChange);
-        window.removeEventListener('online', handleOnline);
-        if (supabase) {
-          supabase.removeChannel(messageChannel);
-          supabase.removeChannel(reactionChannel);
-          supabase.removeChannel(messageReactionChannel);
-        }
-      };
+    if (messageReactionsResult.error) {
+      console.error('Error fetching message reactions:', messageReactionsResult.error);
+    } else {
+      setMessageReactions(messageReactionsResult.data || []);
     }
   }, [roomId, isDemoMode]);
 
+  // リアルタイムチャンネルをセットアップ
+  const setupRealtimeChannels = useCallback(async () => {
+    if (isDemoMode || !supabase || isSubscribedRef.current) return;
+
+    // 既存のチャンネルをクリーンアップ
+    channelsRef.current.forEach((channel) => {
+      supabase!.removeChannel(channel);
+    });
+    channelsRef.current = [];
+
+    const subscribeWithRetry = async (
+      channel: RealtimeChannel,
+      channelName: string
+    ): Promise<boolean> => {
+      return new Promise((resolve) => {
+        channel.subscribe(async (status) => {
+          if (status === 'SUBSCRIBED') {
+            console.log(`${channelName} subscribed successfully`);
+            resolve(true);
+          } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            console.error(`${channelName} ${status}`);
+            resolve(false);
+          }
+        });
+      });
+    };
+
+    // メッセージチャンネル
+    const messageChannel = supabase
+      .channel(`messages-${roomId}-${Date.now()}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+          filter: `room_id=eq.${roomId}`,
+        },
+        (payload) => {
+          const newMessage = payload.new as Message;
+          setMessages((prev) => {
+            // 重複チェック（楽観的更新との整合性）
+            if (prev.some((m) => m.id === newMessage.id)) return prev;
+            return [
+              ...prev,
+              {
+                ...newMessage,
+                isSender: newMessage.user_id === currentUserIdRef.current,
+                mentions: newMessage.mentions || [],
+              },
+            ];
+          });
+        }
+      );
+
+    // リアクションチャンネル
+    const reactionChannel = supabase
+      .channel(`reactions-${roomId}-${Date.now()}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'reactions',
+          filter: `room_id=eq.${roomId}`,
+        },
+        (payload) => {
+          const newReaction = payload.new as Reaction;
+          setReactions((prev) => {
+            if (prev.some((r) => r.id === newReaction.id)) return prev;
+            return [...prev, newReaction];
+          });
+        }
+      );
+
+    // メッセージリアクションチャンネル
+    const messageReactionChannel = supabase
+      .channel(`message-reactions-${roomId}-${Date.now()}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'message_reactions',
+          filter: `room_id=eq.${roomId}`,
+        },
+        (payload) => {
+          const newReaction = payload.new as MessageReaction;
+          setMessageReactions((prev) => {
+            if (prev.some((r) => r.id === newReaction.id)) return prev;
+            return [...prev, newReaction];
+          });
+        }
+      );
+
+    channelsRef.current = [messageChannel, reactionChannel, messageReactionChannel];
+
+    // 全チャンネルをサブスクライブ
+    const results = await Promise.all([
+      subscribeWithRetry(messageChannel, 'Messages'),
+      subscribeWithRetry(reactionChannel, 'Reactions'),
+      subscribeWithRetry(messageReactionChannel, 'MessageReactions'),
+    ]);
+
+    const allSubscribed = results.every((r) => r);
+
+    if (allSubscribed) {
+      isSubscribedRef.current = true;
+      retryCountRef.current = 0;
+      console.log('All realtime channels subscribed successfully');
+    } else {
+      // 失敗した場合はリトライ
+      if (retryCountRef.current < maxRetries) {
+        retryCountRef.current++;
+        const delay = Math.min(1000 * Math.pow(2, retryCountRef.current), 30000);
+        console.log(`Retrying subscription in ${delay}ms (attempt ${retryCountRef.current}/${maxRetries})`);
+        await sleep(delay);
+        setupRealtimeChannels();
+      } else {
+        console.error('Max retries reached for realtime subscription');
+      }
+    }
+  }, [roomId, isDemoMode]);
+
+  // メイン useEffect
+  useEffect(() => {
+    if (isDemoMode) {
+      const now = new Date().toISOString();
+      setMessages([
+        {
+          id: 'system-info',
+          text: '接続設定がまだ行われていないためデモ表示中です。Supabase を設定するとリアルタイム同期が有効になります。',
+          timestamp: now,
+          user_id: 'システムメッセージ',
+          isSender: false,
+          room_id: roomId,
+          is_host: false,
+          host_name: null,
+          mentions: [],
+        },
+      ]);
+      return;
+    }
+
+    // 初期データ取得
+    fetchInitialData();
+
+    // リアルタイムチャンネルセットアップ
+    setupRealtimeChannels();
+
+    // ページ可視性変更時のハンドラ
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        console.log('Page became visible, refreshing data and reconnecting...');
+        fetchInitialData();
+        // リアルタイム接続を再確立
+        isSubscribedRef.current = false;
+        retryCountRef.current = 0;
+        setupRealtimeChannels();
+      }
+    };
+
+    // オンライン復帰時のハンドラ
+    const handleOnline = () => {
+      console.log('Network restored, refreshing data and reconnecting...');
+      fetchInitialData();
+      isSubscribedRef.current = false;
+      retryCountRef.current = 0;
+      setupRealtimeChannels();
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('online', handleOnline);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('online', handleOnline);
+      if (supabase) {
+        const client = supabase;
+        channelsRef.current.forEach((channel) => {
+          client.removeChannel(channel);
+        });
+        channelsRef.current = [];
+        isSubscribedRef.current = false;
+      }
+    };
+  }, [roomId, isDemoMode, fetchInitialData, setupRealtimeChannels]);
+
+  // メッセージ送信（楽観的更新付き）
   const sendMessage = useCallback(
     async (text: string, options?: SendMessageOptions) => {
       const { mentions = [], isHost = false, hostName } = options || {};
@@ -239,19 +284,24 @@ export function useChatRoom(roomId: string) {
         host_name: isHost ? hostName || null : null,
       };
 
+      // 楽観的更新：即座にUIに反映
+      setMessages((prev) => [...prev, { ...newMessage, isSender: true }]);
+
       if (isDemoMode || !supabase) {
-        setMessages((prev) => [...prev, { ...newMessage, isSender: true }]);
         return;
       }
 
-      const { error } = await (supabase!.from('messages') as any).insert([newMessage]);
+      const { error } = await (supabase.from('messages') as any).insert([newMessage]);
       if (error) {
         console.error('Error sending message:', error);
+        // エラー時は楽観的更新をロールバック
+        setMessages((prev) => prev.filter((m) => m.id !== newMessage.id));
       }
     },
     [roomId, isDemoMode]
   );
 
+  // リアクション追加（楽観的更新付き）
   const addReaction = useCallback(
     async (type: ReactionType) => {
       const now = new Date().toISOString();
@@ -262,19 +312,23 @@ export function useChatRoom(roomId: string) {
         room_id: roomId,
       };
 
+      // 楽観的更新
+      setReactions((prev) => [...prev, newReaction]);
+
       if (isDemoMode || !supabase) {
-        setReactions((prev) => [...prev, newReaction]);
         return;
       }
 
-      const { error } = await (supabase!.from('reactions') as any).insert([newReaction]);
+      const { error } = await (supabase.from('reactions') as any).insert([newReaction]);
       if (error) {
         console.error('Error adding reaction:', error);
+        setReactions((prev) => prev.filter((r) => r.id !== newReaction.id));
       }
     },
     [roomId, isDemoMode]
   );
 
+  // メッセージリアクション追加（楽観的更新付き）
   const addMessageReaction = useCallback(
     async (messageId: string, type: ReactionType) => {
       const now = new Date().toISOString();
@@ -287,14 +341,17 @@ export function useChatRoom(roomId: string) {
         type,
       };
 
+      // 楽観的更新
+      setMessageReactions((prev) => [...prev, newReaction]);
+
       if (isDemoMode || !supabase) {
-        setMessageReactions((prev) => [...prev, newReaction]);
         return;
       }
 
-      const { error } = await (supabase!.from('message_reactions') as any).insert([newReaction]);
+      const { error } = await (supabase.from('message_reactions') as any).insert([newReaction]);
       if (error) {
         console.error('Error adding message reaction:', error);
+        setMessageReactions((prev) => prev.filter((r) => r.id !== newReaction.id));
       }
     },
     [roomId, isDemoMode]
